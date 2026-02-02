@@ -227,7 +227,8 @@ class Visualizer:
             vertical_spacing=0.06,
             horizontal_spacing=0.1,
             row_heights=row_heights,
-            specs=specs
+            specs=specs,
+            shared_xaxes=True
         )
         
         # Track trace indices for visibility toggling
@@ -376,6 +377,19 @@ class Visualizer:
             spikecolor='#888888',
             spikedash='dot'
         )
+        
+        # Keep x-axis tick labels visible on all subplots (shared_xaxes hides them by default)
+        n_xaxes = n_designators + 1  # individual subplots + comparison plot
+        for i in range(1, n_xaxes + 1):
+            xaxis_name = "xaxis" if i == 1 else f"xaxis{i}"
+            if xaxis_name in fig.layout:
+                fig.layout[xaxis_name].showticklabels = True
+        
+        # Link all x-axes so zooming any subplot zooms all 8 + comparison
+        for i in range(2, n_xaxes + 1):
+            xaxis_name = f"xaxis{i}"
+            if xaxis_name in fig.layout:
+                fig.layout[xaxis_name].matches = "x"
         
         # Update all y-axes with crosshair spike lines
         fig.update_yaxes(
