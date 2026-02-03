@@ -314,7 +314,7 @@ class Visualizer:
             gridcolor='#E5E5E5', zerolinecolor='#E5E5E5'
         )})
         if avg_plot_xaxis in fig.layout:
-            fig.layout[avg_plot_xaxis].title = dict(text="Roller position", font=dict(size=11, color='#555'))
+            fig.layout[avg_plot_xaxis].title = dict(text="Sensor position", font=dict(size=11, color='#555'))
             fig.layout[avg_plot_xaxis].tickvals = [1, 3, 5, 7]
             fig.layout[avg_plot_xaxis].ticktext = ['R1', 'R3', 'R5', 'R7']
         
@@ -377,7 +377,7 @@ class Visualizer:
         for annotation in fig['layout']['annotations']:
             if (annotation['text'] in designators or
                     annotation['text'] == "All Designators Comparison" or
-                    annotation['text'] == "Average Angle by Position"):
+                    annotation['text'] == "Average Angular Mistracking by Position"):
                 annotation['font'] = dict(size=13, color='#2C3E50', family='Arial, sans-serif')
         
         # Ensure Average Angle traces never appear in legend
