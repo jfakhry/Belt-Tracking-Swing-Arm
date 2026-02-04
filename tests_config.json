@@ -1,16 +1,24 @@
 {
     "tests": {
-        "Stationary": {
+        "PAT Baseline - Stationary": {
             "from": "2026-02-03T18:02:36.290Z",
             "to": "2026-02-03T18:09:06.112Z"
         },
-        "100 FPM": {
+        "PAT Baseline - 100 FPM": {
             "from": "2026-02-03T18:09:14.459Z",
             "to": "2026-02-03T18:15:41.884Z"
         },
-        "300 FPM": {
+        "PAT Baseline - 300 FPM": {
             "from": "2026-02-03T18:29:21.996Z",
             "to": "2026-02-03T18:44:42.927Z"
+        },
+        "PAT Mistracked - Mining Left": {
+            "from": "2026-02-03T23:51:08.343Z",
+            "to":"2026-02-04T00:06:26.635Z"
+        },
+        "PAT Mistracked - Mining Right": {
+            "from":"2026-02-04T01:59:10.360Z",
+            "to":"2026-02-04T02:16:16.293Z"
         }
     }
 }

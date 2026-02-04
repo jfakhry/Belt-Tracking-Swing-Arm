@@ -265,8 +265,8 @@ class DataCollector:
         
         local_tz = pytz.timezone(self.LOCAL_TIMEZONE)
         
-        # Parse times to datetime
-        df['time'] = pd.to_datetime(df['time'])
+        # Parse times to datetime (InfluxDB can return with or without milliseconds)
+        df['time'] = pd.to_datetime(df['time'], format='ISO8601', utc=True)
         
         # Check if already timezone-aware
         if df['time'].dt.tz is not None:
