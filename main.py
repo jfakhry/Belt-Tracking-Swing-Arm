@@ -52,13 +52,14 @@ def main(force_refresh: bool = False):
     print("-" * 60)
     
     all_data = collector.collect_all_tests(force_refresh=force_refresh)
-    
+    time_ranges = collector.test_config.all()
+
     # Generate multi-test report
     print("\n" + "-" * 60)
     print("Generating report...")
     print("-" * 60)
-    
-    report_path = visualizer.generate_multi_test_report(all_data)
+
+    report_path = visualizer.generate_multi_test_report(all_data, time_ranges=time_ranges)
     
     print("\n" + "=" * 60)
     print("Analysis complete!")

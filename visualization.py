@@ -3,6 +3,8 @@ Visualization Module for Belt Tracking Swing Arm Analysis
 Uses Plotly to generate interactive HTML reports
 """
 
+import html as html_module
+import json
 import re
 
 import plotly.graph_objects as go
@@ -12,9 +14,19 @@ from pathlib import Path
 from datetime import datetime
 
 
+# Base URL for Grafana dashboard; {from} and {to} are replaced with test time range (ISO 8601)
+GRAFANA_BASE_URL = (
+    "https://data.prufrock.dev/d/joj6pc4/swing-arm-belt-edge-detection"
+    "?folderUid=dd515790-d4d4-480a-88ca-6d1ba733be9c&orgId=1"
+    "&from={from}&to={to}&timezone=browser"
+    "&var-query0=&var-datasource=p_EKvrBnk&var-query0-2=&var-policy=autogen"
+    "&var-query0-3=&var-filter=&var-vin=&refresh=auto"
+)
+
+
 class Visualizer:
     """Handles Plotly visualizations and HTML report generation."""
-    
+
     # Color palette for designators (visually distinct, colorblind-friendly)
     COLORS = [
         '#2E86AB',  # Steel Blue
@@ -273,29 +285,6 @@ class Visualizer:
                     row=n_total_rows, col=1
                 )
         
-        buttons = []
-        for test_idx, test_name in enumerate(test_names):
-            visibility = []
-            for t_idx in range(len(test_names)):
-                is_selected = (t_idx == test_idx)
-                for _ in range(n_designators):
-                    visibility.append(is_selected)
-                for _ in range(n_designators):
-                    visibility.append(is_selected)
-                for _ in range(2):
-                    visibility.append(is_selected)
-            buttons.append(dict(
-                label=test_name,
-                method="update",
-                args=[
-                    {"visible": visibility},
-                    {"title": dict(
-                        text=f"<b>Belt Tracking Swing Arm Analysis</b><br><span style='font-size:14px;color:#666'>{test_name}</span>",
-                        font=dict(size=22, color='#2C3E50', family='Arial, sans-serif'), x=0.5, xanchor='center'
-                    )}
-                ]
-            ))
-        
         for i in range(n_designators):
             yaxis_name = f"yaxis{i + 1}" if i > 0 else "yaxis"
             fig.update_layout(**{yaxis_name: dict(
@@ -348,12 +337,6 @@ class Visualizer:
             paper_bgcolor='#FAFAFA',
             plot_bgcolor='white',
             font=dict(family='Arial, sans-serif'),
-            updatemenus=[dict(
-                active=0, buttons=buttons, direction="down", showactive=True,
-                x=0.0, xanchor="left", y=1.12, yanchor="top",
-                bgcolor="#F0F0F0", bordercolor="#CCCCCC", borderwidth=1,
-                font=dict(size=12, color='#333333'), pad=dict(l=5, r=5, t=3, b=3)
-            )],
             legend=dict(
                 orientation="h",
                 yanchor="top",
@@ -405,15 +388,145 @@ class Visualizer:
         print(f"Report saved to: {output_path}")
         return output_path
     
+    def _build_grafana_url(self, from_iso: str, to_iso: str) -> str:
+        """Build Grafana dashboard URL for a given time range (ISO 8601)."""
+        return GRAFANA_BASE_URL.replace("{from}", from_iso).replace("{to}", to_iso)
+
+    def _build_per_test_updates(
+        self, test_names: list[str], n_designators: int
+    ) -> list[dict]:
+        """Build visibility and title update for each test (same logic as Plotly dropdown buttons)."""
+        updates = []
+        for test_idx, test_name in enumerate(test_names):
+            visibility = []
+            for t_idx in range(len(test_names)):
+                is_selected = t_idx == test_idx
+                for _ in range(n_designators):
+                    visibility.append(is_selected)
+                for _ in range(n_designators):
+                    visibility.append(is_selected)
+                for _ in range(2):
+                    visibility.append(is_selected)
+            title = dict(
+                text=f"<b>Belt Tracking Swing Arm Analysis</b><br><span style='font-size:14px;color:#666'>{test_name}</span>",
+                font=dict(size=22, color='#2C3E50', family='Arial, sans-serif'),
+                x=0.5,
+                xanchor='center',
+            )
+            updates.append({"visible": visibility, "title": title})
+        return updates
+
+    def _inject_grafana_links(
+        self,
+        output_path: Path,
+        test_names: list[str],
+        time_ranges: dict,
+        n_designators: int,
+    ) -> None:
+        """
+        Inject one test dropdown and one Grafana Data link. Changing the dropdown
+        updates the plot (visibility + title) and the link to that test's time range.
+        """
+        with open(output_path, "r", encoding="utf-8") as f:
+            html = f.read()
+
+        updates = self._build_per_test_updates(test_names, n_designators)
+        tr0 = time_ranges.get(test_names[0], {})
+        initial_url = self._build_grafana_url(
+            tr0.get("from", ""), tr0.get("to", "")
+        ) if tr0 else "#"
+
+        # Data for JS: test names, time ranges, base URL, and per-test plot updates
+        payload = {
+            "testNames": test_names,
+            "timeRanges": time_ranges,
+            "baseUrl": GRAFANA_BASE_URL,
+            "updates": updates,
+        }
+        data_script = (
+            "<script type=\"text/javascript\">\n"
+            "window.REPORT_DATA = " + json.dumps(payload) + ";\n"
+            "</script>\n"
+        )
+
+        options_html = "".join(
+            f'<option value="{i}">{html_module.escape(name)}</option>'
+            for i, name in enumerate(test_names)
+        )
+        link_block = (
+            '<div id="report-controls" style="'
+            'position:absolute;top:60px;left:12px;z-index:20;'
+            'font-family:Arial,sans-serif;font-size:12px;'
+            'background-color:#F0F0F0;border:1px solid #CCCCCC;border-radius:4px;'
+            'padding:8px 10px;box-shadow:0 1px 2px rgba(0,0,0,0.05);">'
+            '<label for="test-select" style="color:#2C3E50;font-weight:600;margin-right:6px;">Test</label>'
+            f'<select id="test-select" style="'
+            'background:#fff;border:1px solid #CCCCCC;border-radius:3px;'
+            'color:#333;font-size:12px;padding:4px 6px;min-width:180px;'
+            'font-family:Arial,sans-serif;cursor:pointer;">'
+            f'{options_html}</select>'
+            '<span style="margin:0 8px;color:#CCCCCC;">|</span>'
+            f'<a id="grafana-link" href="{html_module.escape(initial_url)}" target="_blank" rel="noopener" style="'
+            'color:#2E86AB;text-decoration:none;font-weight:500;">Grafana Data</a>'
+            "</div>\n"
+            "<style>#grafana-link:hover{text-decoration:underline;color:#2C3E50;}</style>\n"
+        )
+
+        update_script = """
+<script type="text/javascript">
+(function() {
+  var d = window.REPORT_DATA;
+  if (!d || !d.updates || !d.testNames) return;
+  var select = document.getElementById('test-select');
+  var link = document.getElementById('grafana-link');
+  if (!select || !link) return;
+  function setTest(index) {
+    var u = d.updates[index];
+    var tr = d.timeRanges[d.testNames[index]];
+    if (u) {
+      var gd = document.querySelector('.plotly-graph-div');
+      if (gd && typeof Plotly !== 'undefined') {
+        Plotly.restyle(gd, {visible: u.visible});
+        Plotly.relayout(gd, {title: u.title});
+      }
+    }
+    if (tr && tr.from && tr.to) {
+      link.href = d.baseUrl.replace('{from}', tr.from).replace('{to}', tr.to);
+    }
+  }
+  select.addEventListener('change', function() {
+    setTest(parseInt(select.value, 10));
+  });
+})();
+</script>
+"""
+
+        html = html.replace(
+            "<body>",
+            "<body>\n" + data_script + link_block + update_script,
+            1,
+        )
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(html)
+
     def generate_multi_test_report(
         self,
         all_test_data: dict[str, dict[str, pd.DataFrame]],
-        report_name: str = "report"
+        report_name: str = "report",
+        time_ranges: dict = None,
     ) -> Path:
-        """Generate an HTML report with dropdown to switch between multiple tests. Overwrites existing file."""
+        """Generate an HTML report with dropdown to switch between multiple tests. Overwrites existing file.
+        If time_ranges is provided, injects one test dropdown and one Grafana Data link (one link per test view)."""
         output_path = self.output_dir / f"{report_name}.html"
+        test_names = list(all_test_data.keys())
         fig = self.plot_multi_test_grid(all_test_data)
         fig.write_html(output_path)
+        if time_ranges and test_names:
+            designators = list(next(iter(all_test_data.values())).keys())
+            n_designators = len(designators)
+            self._inject_grafana_links(
+                output_path, test_names, time_ranges, n_designators
+            )
         print(f"Report saved to: {output_path}")
         return output_path
     
