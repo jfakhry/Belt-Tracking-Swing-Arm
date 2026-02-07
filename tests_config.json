@@ -19,6 +19,26 @@
         "PAT Mistracked - Mining Right": {
             "from":"2026-02-04T01:59:10.360Z",
             "to":"2026-02-04T02:16:16.293Z"
+        },
+        "Standard Baseline - Stationary": {
+            "from":"2026-02-07T17:05:12.595Z",
+            "to":"2026-02-07T17:10:21.221Z"
+        },
+        "Standard Baseline - 100 FPM": {
+            "from":"2026-02-07T17:10:42.011Z",
+            "to":"2026-02-07T17:16:01.583Z"
+        },
+        "Standard Baseline - 300 FPM": {
+            "from":"2026-02-07T17:23:35.154Z",
+            "to":"2026-02-07T17:38:46.296Z"
+        },
+        "Standard Mistracked - Mining Left": {
+            "from":"2026-02-07T19:10:46.744Z",
+            "to":"2026-02-07T19:27:12.360Z"
+        },
+        "Standard Mistracked - Mining Right": {
+            "from":"2026-02-07T19:57:19.668Z",
+            "to":"2026-02-07T20:13:20.753Z"
         }
     }
 }
