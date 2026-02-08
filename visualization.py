@@ -73,40 +73,50 @@ class Visualizer:
         self,
         test_data: dict[str, pd.DataFrame],
         designators: list[str]
-    ) -> tuple[list[float], list[float], list[float], list[float]]:
+    ) -> tuple[list[float], list[float], list[float], list[float], list[float], list[float]]:
         """
-        Compute average angle per designator and split into left/right for spline plot.
-        Returns (left_x, left_y, right_x, right_y) where x is roller position (1, 3, 5, 7).
+        Compute average angle and std per designator and split into left/right for spline plot.
+        Returns (left_x, left_y, left_std, right_x, right_y, right_std) where x is roller position (1, 3, 5, 7).
         """
         left_positions = []
         left_avgs = []
+        left_stds = []
         right_positions = []
         right_avgs = []
+        right_stds = []
         
         for designator in designators:
             df = test_data.get(designator, pd.DataFrame())
             value_col = self._get_value_column(df)
             if df.empty or not value_col:
                 continue
-            avg = df[value_col].mean()
+            avg = float(df[value_col].mean())
+            std = df[value_col].std()
+            std = 0.0 if pd.isna(std) else float(std)
             match = re.match(r'R(\d+)', designator, re.IGNORECASE)
             pos = int(match.group(1)) if match else 0
             if 'LEFT' in designator.upper():
                 left_positions.append(float(pos))
                 left_avgs.append(avg)
+                left_stds.append(std)
             elif 'RIGHT' in designator.upper():
                 right_positions.append(float(pos))
                 right_avgs.append(avg)
+                right_stds.append(std)
         
         if left_positions:
-            sorted_lr = sorted(zip(left_positions, left_avgs))
-            left_positions, left_avgs = [t[0] for t in sorted_lr], [t[1] for t in sorted_lr]
+            sorted_lr = sorted(zip(left_positions, left_avgs, left_stds))
+            left_positions = [t[0] for t in sorted_lr]
+            left_avgs = [t[1] for t in sorted_lr]
+            left_stds = [t[2] for t in sorted_lr]
         if right_positions:
-            sorted_lr = sorted(zip(right_positions, right_avgs))
-            right_positions, right_avgs = [t[0] for t in sorted_lr], [t[1] for t in sorted_lr]
+            sorted_lr = sorted(zip(right_positions, right_avgs, right_stds))
+            right_positions = [t[0] for t in sorted_lr]
+            right_avgs = [t[1] for t in sorted_lr]
+            right_stds = [t[2] for t in sorted_lr]
         
-        return (left_positions, left_avgs, right_positions, right_avgs)
-    
+        return (left_positions, left_avgs, left_stds, right_positions, right_avgs, right_stds)
+
     def plot_single(self, df: pd.DataFrame, designator: str) -> go.Figure:
         """Create a simple line plot for a single designator."""
         fig = go.Figure()
@@ -180,19 +190,20 @@ class Visualizer:
         test_names = list(all_test_data.keys())
         if not test_names:
             raise ValueError("No test data provided")
-        
+
         first_test_data = all_test_data[test_names[0]]
         designators = list(first_test_data.keys())
         n_designators = len(designators)
         n_grid_rows = (n_designators + 1) // 2
-        n_total_rows = n_grid_rows + 2
-        
-        subplot_titles = designators + ["All Designators Comparison", "Average Angle by Position"]
-        row_heights = [1] * n_grid_rows + [1.5, 1.0]
+        n_total_rows = n_grid_rows + 3
+
+        subplot_titles = designators + ["All Designators Comparison", "Average Angle by Position", ""]
+        row_heights = [1] * n_grid_rows + [1.5, 1.0, 1.1]
         specs = [[{}, {}] for _ in range(n_grid_rows)]
         specs.append([{"colspan": 2}, None])
         specs.append([{"colspan": 2}, None])
-        
+        specs.append([{"type": "table", "colspan": 2}, None])
+
         fig = make_subplots(
             rows=n_total_rows,
             cols=2,
@@ -230,7 +241,7 @@ class Visualizer:
                         row=row, col=col
                     )
             
-            comparison_row = n_total_rows - 1
+            comparison_row = n_total_rows - 2
             for i, designator in enumerate(designators):
                 df = test_data.get(designator, pd.DataFrame())
                 value_col = self._get_value_column(df)
@@ -253,21 +264,33 @@ class Visualizer:
                         row=comparison_row, col=1
                     )
             
-            left_x, left_y, right_x, right_y = self._compute_average_angles_splines(test_data, designators)
+            left_x, left_y, left_std, right_x, right_y, right_std = self._compute_average_angles_splines(
+                test_data, designators
+            )
             if left_x and left_y:
                 fig.add_trace(
                     go.Scatter(
                         x=left_x, y=left_y, mode='lines+markers', name='Left',
                         showlegend=False, visible=visible,
                         line=dict(shape='spline', width=2, color='#2E86AB'),
-                        hovertemplate='R%{x:.0f} Left: %{y:.2f} deg<extra></extra>'
+                        error_y=dict(
+                            type='data',
+                            array=[float(s) for s in left_std],
+                            symmetric=True,
+                            color='#2E86AB',
+                            thickness=1.5,
+                            width=4,
+                            visible=True,
+                        ),
+                        customdata=[float(s) for s in left_std],
+                        hovertemplate='R%{x:.0f} Left: %{y:.2f} ± %{customdata:.2f} deg<extra></extra>'
                     ),
-                    row=n_total_rows, col=1
+                    row=n_total_rows - 1, col=1
                 )
             else:
                 fig.add_trace(
                     go.Scatter(x=[], y=[], mode='lines', name='Left', showlegend=False, visible=visible),
-                    row=n_total_rows, col=1
+                    row=n_total_rows - 1, col=1
                 )
             if right_x and right_y:
                 fig.add_trace(
@@ -275,16 +298,69 @@ class Visualizer:
                         x=right_x, y=right_y, mode='lines+markers', name='Right',
                         showlegend=False, visible=visible,
                         line=dict(shape='spline', width=2, color='#C73E1D'),
-                        hovertemplate='R%{x:.0f} Right: %{y:.2f} deg<extra></extra>'
+                        error_y=dict(
+                            type='data',
+                            array=[float(s) for s in right_std],
+                            symmetric=True,
+                            color='#C73E1D',
+                            thickness=1.5,
+                            width=4,
+                            visible=True,
+                        ),
+                        customdata=[float(s) for s in right_std],
+                        hovertemplate='R%{x:.0f} Right: %{y:.2f} ± %{customdata:.2f} deg<extra></extra>'
                     ),
-                    row=n_total_rows, col=1
+                    row=n_total_rows - 1, col=1
                 )
             else:
                 fig.add_trace(
                     go.Scatter(x=[], y=[], mode='lines', name='Right', showlegend=False, visible=visible),
-                    row=n_total_rows, col=1
+                    row=n_total_rows - 1, col=1
                 )
-        
+
+            # Table: same data as Average Angle by Position (Position, Left/Right Avg, then Left/Right Std)
+            positions = [1, 3, 5, 7]
+            pos_labels = [f"R{p}" for p in positions]
+            left_avg_str = []
+            left_std_str = []
+            right_avg_str = []
+            right_std_str = []
+            for p in positions:
+                if left_x and p in left_x:
+                    idx = left_x.index(p)
+                    left_avg_str.append(f"{left_y[idx]:.2f}")
+                    left_std_str.append(f"{left_std[idx]:.2f}")
+                else:
+                    left_avg_str.append("—")
+                    left_std_str.append("—")
+                if right_x and p in right_x:
+                    idx = right_x.index(p)
+                    right_avg_str.append(f"{right_y[idx]:.2f}")
+                    right_std_str.append(f"{right_std[idx]:.2f}")
+                else:
+                    right_avg_str.append("—")
+                    right_std_str.append("—")
+            fig.add_trace(
+                go.Table(
+                    header=dict(
+                        values=["Position", "Left Avg [deg]", "Right Avg [deg]", "Left Std Dev [deg]", "Right Std Dev [deg]"],
+                        fill_color="#F0F0F0",
+                        align="center",
+                        font=dict(size=11, color="#2C3E50", family="Arial, sans-serif"),
+                    ),
+                    cells=dict(
+                        values=[pos_labels, left_avg_str, right_avg_str, left_std_str, right_std_str],
+                        fill_color="white",
+                        align="center",
+                        font=dict(size=11, color="#333", family="Arial, sans-serif"),
+                        height=28,
+                    ),
+                    visible=visible,
+                ),
+                row=n_total_rows,
+                col=1,
+            )
+
         for i in range(n_designators):
             yaxis_name = f"yaxis{i + 1}" if i > 0 else "yaxis"
             fig.update_layout(**{yaxis_name: dict(
@@ -306,7 +382,7 @@ class Visualizer:
             fig.layout[avg_plot_xaxis].title = dict(text="Sensor position", font=dict(size=11, color='#555'))
             fig.layout[avg_plot_xaxis].tickvals = [1, 3, 5, 7]
             fig.layout[avg_plot_xaxis].ticktext = ['R1', 'R3', 'R5', 'R7']
-        
+
         fig.update_xaxes(
             gridcolor='#E5E5E5', zerolinecolor='#E5E5E5', tickfont=dict(size=10, color='#555'),
             showspikes=True, spikemode='across', spikesnap='cursor', spikethickness=1,
@@ -332,7 +408,7 @@ class Visualizer:
                 text=f"<b>Belt Tracking Swing Arm Analysis</b><br><span style='font-size:14px;color:#666'>{test_names[0]}</span>",
                 font=dict(size=22, color='#2C3E50', family='Arial, sans-serif'), x=0.5, xanchor='center'
             ),
-            height=300 * n_grid_rows + 550,
+            height=300 * n_grid_rows + 550 + 420,
             template="plotly_white",
             paper_bgcolor='#FAFAFA',
             plot_bgcolor='white',
@@ -340,7 +416,7 @@ class Visualizer:
             legend=dict(
                 orientation="h",
                 yanchor="top",
-                y=0.15,
+                y=0.28,
                 xanchor="center",
                 x=0.5,
                 xref="paper",
@@ -360,7 +436,7 @@ class Visualizer:
         for annotation in fig['layout']['annotations']:
             if (annotation['text'] in designators or
                     annotation['text'] == "All Designators Comparison" or
-                    annotation['text'] == "Average Angular Mistracking by Position"):
+                    annotation['text'] == "Average Angle by Position"):
                 annotation['font'] = dict(size=13, color='#2C3E50', family='Arial, sans-serif')
         
         # Ensure Average Angle traces never appear in legend
@@ -406,6 +482,8 @@ class Visualizer:
                 for _ in range(n_designators):
                     visibility.append(is_selected)
                 for _ in range(2):
+                    visibility.append(is_selected)
+                for _ in range(1):
                     visibility.append(is_selected)
             title = dict(
                 text=f"<b>Belt Tracking Swing Arm Analysis</b><br><span style='font-size:14px;color:#666'>{test_name}</span>",
