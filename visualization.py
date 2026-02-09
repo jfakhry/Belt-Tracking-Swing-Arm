@@ -44,10 +44,10 @@ class Visualizer:
         Initialize Visualizer.
         
         Args:
-            output_dir: Directory for HTML reports. Defaults to 'reports/' folder.
+            output_dir: Directory for HTML reports. Defaults to 'docs/' folder.
         """
         if output_dir is None:
-            output_dir = Path(__file__).parent / "reports"
+            output_dir = Path(__file__).parent / "docs"
         self.output_dir = output_dir
         self._ensure_output_dir()
     
@@ -595,7 +595,7 @@ class Visualizer:
     ) -> Path:
         """Generate an HTML report with dropdown to switch between multiple tests. Overwrites existing file.
         If time_ranges is provided, injects one test dropdown and one Grafana Data link (one link per test view)."""
-        output_path = self.output_dir / f"{report_name}.html"
+        output_path = self.output_dir / "index.html"
         test_names = list(all_test_data.keys())
         fig = self.plot_multi_test_grid(all_test_data)
         fig.write_html(output_path)
