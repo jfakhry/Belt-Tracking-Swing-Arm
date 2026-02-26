@@ -6,6 +6,7 @@ Uses local caching - only new tests are fetched from InfluxDB.
 """
 
 from data_collection import DataCollector
+from data_processing import DataProcessor
 from visualization import Visualizer
 
 
@@ -52,14 +53,30 @@ def main(force_refresh: bool = False):
     print("-" * 60)
     
     all_data = collector.collect_all_tests(force_refresh=force_refresh)
+    # Time ranges are read from tests_config.json here; they are embedded in the report (e.g. Grafana links).
+    # If you change the config, re-run this script to regenerate the report with the new times.
     time_ranges = collector.test_config.all()
+
+    # Process data (e.g. averages by position)
+    print("\n" + "-" * 60)
+    print("Processing data...")
+    print("-" * 60)
+    processor = DataProcessor()
+    processed = processor.process(all_data)
 
     # Generate multi-test report
     print("\n" + "-" * 60)
     print("Generating report...")
     print("-" * 60)
 
-    report_path = visualizer.generate_multi_test_report(all_data, time_ranges=time_ranges)
+    report_path = visualizer.generate_multi_test_report(
+        all_data,
+        average_angles_by_position=processed.get("average_angles_by_position"),
+        delta_mistracking_baseline=processed.get("delta_mistracking_baseline"),
+        centerline_comparison=processed.get("centerline_comparison"),
+        re_tracking_summary=processed.get("re_tracking_summary"),
+        time_ranges=time_ranges,
+    )
     
     print("\n" + "=" * 60)
     print("Analysis complete!")
