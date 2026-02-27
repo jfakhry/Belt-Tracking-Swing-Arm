@@ -1067,7 +1067,7 @@ class Visualizer:
     <li><strong>Sensor accuracy</strong><br>
       High initial offset (± 1.5°).
       <div style="margin:8px 0 6px 0;">
-        <img src="../reports/Report%20images/inclinometer%20offset%20error.png" alt="Inclinometer offset error" style="max-width:1200px;width:100%;height:auto;border:1px solid #ddd;border-radius:4px;">
+        <img src="Report%20images/inclinometer%20offset%20error.png" alt="Inclinometer offset error" style="max-width:1200px;width:100%;height:auto;border:1px solid #ddd;border-radius:4px;">
       </div>
       Low accuracy (± 0.6°).
     </li>
@@ -1099,10 +1099,10 @@ class Visualizer:
   <p>\(l_{\mathrm{STD}}\), swing arm length for Standard [in]: 17.59521</p>
   <div style="display:flex; flex-wrap:wrap; gap:16px; margin:12px 0;">
     <div style="flex:1; min-width:280px;">
-      <img src="../reports/Report%20images/swing%20arm%20length%20pat.png" alt="Swing arm length PAT" style="max-width:100%; height:auto; border:1px solid #ddd; border-radius:4px;">
+      <img src="Report%20images/swing%20arm%20length%20pat.png" alt="Swing arm length PAT" style="max-width:100%; height:auto; border:1px solid #ddd; border-radius:4px;">
     </div>
     <div style="flex:1; min-width:280px;">
-      <img src="../reports/Report%20images/swing%20arm%20length%20standard.png" alt="Swing arm length Standard" style="max-width:100%; height:auto; border:1px solid #ddd; border-radius:4px;">
+      <img src="Report%20images/swing%20arm%20length%20standard.png" alt="Swing arm length Standard" style="max-width:100%; height:auto; border:1px solid #ddd; border-radius:4px;">
     </div>
   </div>
   <h2>Re-tracking roll rate</h2>
@@ -1114,7 +1114,7 @@ class Visualizer:
     </div>
     <div style="flex:1; min-width:280px;">
       <div style="margin:12px 0;">
-    <img src="../reports/Report%20images/retracking%20roll%20rate%20clean.png" alt="Re-tracking roll rate" style="max-width:50%; width:50%; height:auto; border:1px solid #ddd; border-radius:4px;">
+    <img src="Report%20images/retracking%20roll%20rate%20clean.png" alt="Re-tracking roll rate" style="max-width:50%; width:50%; height:auto; border:1px solid #ddd; border-radius:4px;">
   </div>
     </div>
   </div>
@@ -1130,7 +1130,7 @@ class Visualizer:
     </div>
     <div style="flex:1; min-width:280px;">
  <div style="margin:12px 0;">
-    <img src="../reports/Report%20images/top%20down%20re-tracking%20rate.png" alt="Top down re-tracking rate" style="max-width:50%; width:50%; height:auto; border:1px solid #ddd; border-radius:4px;">
+    <img src="Report%20images/top%20down%20re-tracking%20rate.png" alt="Top down re-tracking rate" style="max-width:50%; width:50%; height:auto; border:1px solid #ddd; border-radius:4px;">
   </div>
     </div>
   </div>
