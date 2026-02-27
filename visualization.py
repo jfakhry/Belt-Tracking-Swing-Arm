@@ -411,8 +411,8 @@ class Visualizer:
         "PAT Baseline - 300 FPM",
         "Standard Baseline - 300 FPM",
         "PAT Mistracked - Mining Left",
-        "PAT Mistracked - Mining Right",
         "Standard Mistracked - Mining Left",
+        "PAT Mistracked - Mining Right",
         "Standard Mistracked - Mining Right",
     ]
 
@@ -422,9 +422,12 @@ class Visualizer:
     ) -> go.Figure:
         """
         Build a 3x2 grid of average angle by position plots for the Data Processing page.
-        Row 1: PAT Baseline 300 FPM, Standard Baseline 300 FPM.
-        Row 2: PAT Mistracked Mining Left, PAT Mistracked Mining Right.
-        Row 3: Standard Mistracked Mining Left, Standard Mistracked Mining Right.
+        Column 1: all PAT plots (Baseline 300 FPM, Mistracked Left, Mistracked Right).
+        Column 2: all Standard plots (Baseline 300 FPM, Mistracked Left, Mistracked Right).
+        Layout by rows:
+          Row 1: Baseline 300 FPM (PAT, Standard)
+          Row 2: Mistracked Mining Left (PAT, Standard)
+          Row 3: Mistracked Mining Right (PAT, Standard)
         """
         fig = make_subplots(
             rows=3,
@@ -617,6 +620,10 @@ class Visualizer:
 
     # Step 4 Re-Tracking Summary: PAT (blue), Standard (red)
     RE_TRACKING_SUMMARY_PLOT_COLORS = ["#2E86AB", "#C73E1D"]  # blue, red
+    RE_TRACKING_SUMMARY_BAND_COLORS = [
+        "rgba(46,134,171,0.1)",  # PAT band (blue, translucent)
+        "rgba(199,62,29,0.1)",   # Standard band (red, translucent)
+    ]
 
     def plot_re_tracking_summary(self, re_tracking_summary_traces: list[dict]) -> go.Figure:
         """
@@ -624,18 +631,53 @@ class Visualizer:
         Two traces: PAT, Standard. Blue and red. Each includes data points and a trendline with equation.
         """
         fig = go.Figure()
+        pat_slope, pat_intercept = None, None
         for i, trace in enumerate(re_tracking_summary_traces):
             name = trace.get("name", "")
             x = trace.get("x", [])
             y = trace.get("y", [])
             slope = trace.get("slope")
             intercept = trace.get("intercept")
+            if i == 0 and slope is not None and intercept is not None:
+                pat_slope, pat_intercept = slope, intercept
             if not x or not y:
                 continue
             color = (
                 self.RE_TRACKING_SUMMARY_PLOT_COLORS[i]
                 if i < len(self.RE_TRACKING_SUMMARY_PLOT_COLORS)
                 else self.COLORS[i % len(self.COLORS)]
+            )
+            band_color = (
+                self.RE_TRACKING_SUMMARY_BAND_COLORS[i]
+                if i < len(self.RE_TRACKING_SUMMARY_BAND_COLORS)
+                else "rgba(128,128,128,0.1)"
+            )
+            
+            # Error band contributors inset (installation, sensor accuracy, random variation)
+            # Shown as a small stacked bar to the right of the plot (same vertical scale as y-axis).
+            comp_values = [0.6, 0.3, 1.3]  # degrees; sum ≈ 2.2°
+            comp_labels = ["Sensor accuracy", "Installation error", "Worst case std deviation"]
+            # Softer palette to match report style (orange / blue-gray), 0.3 opacity
+            comp_colors = [
+                "rgba(243,156,18,0.4)",   # #F39C12 orange
+                "rgba(46,134,171,0.4)",   # #2E86AB blue
+                "rgba(149,165,166,0.4)",  # #95A5A6 gray
+            ]
+            # Error band: ±2.2 degrees around each data point
+            err = sum(comp_values)
+            y_upper = [val + err for val in y]
+            y_lower = [val - err for val in y]
+            fig.add_trace(
+                go.Scatter(
+                    x=x + x[::-1],
+                    y=y_upper + y_lower[::-1],
+                    fill="toself",
+                    fillcolor=band_color,
+                    line=dict(color="rgba(0,0,0,0)"),
+                    hoverinfo="skip",
+                    showlegend=False,
+                    name=f"{name} ±{err}°",
+                )
             )
             # Data trace
             fig.add_trace(
@@ -657,7 +699,7 @@ class Visualizer:
                         x=x,
                         y=y_fit,
                         mode="lines",
-                        name=f"{name} trend: {eq_str}",
+                        name=f"{name} trendline: {eq_str}",
                         line=dict(dash="dash", width=2, color=color),
                     )
                 )
@@ -684,6 +726,130 @@ class Visualizer:
             title=dict(text="Re-Tracking Summary", font=dict(size=18, color="#2C3E50", family="Arial, sans-serif")),
             hoverlabel=dict(namelength=-1, font=dict(size=12)),
         )
+        
+        # Inset bar position (fixed); we'll move only the text labels
+        inset_x0, inset_x1 = 1.02, 1.08  # just to the right of the main plot (paper coords)
+        shapes = list(getattr(fig.layout, "shapes", [])) or []
+        annotations = list(getattr(fig.layout, "annotations", [])) or []
+        # Sort so largest contributor is on the bottom of the stack, smallest on top
+        stacked = sorted(
+            zip(comp_values, comp_labels, comp_colors),
+            key=lambda t: t[0],
+        )
+        y_base = 0.0
+        scale = 4.0  # keeps the visual bar tall enough to be readable
+        for val, label, c in stacked:
+            y0 = y_base
+            y1 = y_base + val * scale
+            shapes.append(
+                dict(
+                    type="rect",
+                    xref="paper",
+                    yref="y",
+                    x0=inset_x0,
+                    x1=inset_x1,
+                    y0=y0,
+                    y1=y1,
+                    line=dict(width=0),
+                    fillcolor=c,
+                )
+            )
+            # Numeric value inside the bar (centered horizontally in the bar)
+            annotations.append(
+                dict(
+                    x=((inset_x0 + inset_x1) / 2.0) + 0.01,
+                    xref="paper",
+                    y=(y0 + y1) / 2.0,
+                    yref="y",
+                    text=f"{val:.1f}°",
+                    showarrow=False,
+                    align="center",
+                    font=dict(size=13, color="#2C3E50", family="Arial, sans-serif"),
+                )
+            )
+            # Text label to the right of the bar (slightly further right for readability)
+            annotations.append(
+                dict(
+                    x=inset_x1 + 0.01,
+                    xref="paper",
+                    y=(y0 + y1) / 2.0,
+                    yref="y",
+                    text=label,
+                    showarrow=False,
+                    align="left",
+                    xanchor="left",
+                    font=dict(size=13, color="#2C3E50", family="Arial, sans-serif"),
+                )
+            )
+            y_base = y1
+        # Total label at the top of the stack (aligned with bar center, raised slightly)
+        annotations.append(
+            dict(
+                x=((inset_x0 + inset_x1) / 2.0) + 0.05,
+                xref="paper",
+                y=y_base - 10,
+                yref="y",
+                text="±2.2° error band contributors",
+                showarrow=False,
+                font=dict(size=13, color="#2C3E50", family="Arial, sans-serif"),
+                align="left",
+            )
+        )
+        # Outer border around the entire stacked bar (no internal borders)
+        shapes.append(
+            dict(
+                type="rect",
+                xref="paper",
+                yref="y",
+                x0=inset_x0,
+                x1=inset_x1,
+                y0=0.0,
+                y1=y_base,
+                line=dict(width=1, color="#000000"),
+                fillcolor="rgba(0,0,0,0)",
+            )
+        )
+        # Connector lines: bar left edge to PAT error band at x=30 (plot right edge in paper)
+        if pat_slope is not None and pat_intercept is not None:
+            pat_y_at_30 = pat_slope * 30 + pat_intercept
+            err = sum(comp_values)
+            pat_upper = pat_y_at_30 + err
+            pat_lower = pat_y_at_30 - err
+            plot_right_paper = 0.85  # must match xaxis domain above
+            bar_left_paper = inset_x0
+            bar_top_y = y_base  # top of stacked bar in y axis
+            bar_bottom_y = 0.0
+            # Paper x where the plot's data area ends (x=30). Slightly inset so the line
+            # meets the band; nudge right to avoid overshoot.
+            plot_right_paper = 0.945
+            bar_left_paper = inset_x0
+            shapes.append(
+                dict(
+                    type="line",
+                    x0=plot_right_paper,
+                    y0=pat_upper,
+                    x1=bar_left_paper,
+                    y1=bar_top_y,
+                    xref="paper",
+                    yref="y",
+                    line=dict(color="#000000", width=2.5),
+                    opacity=0.5,
+                )
+            )
+            shapes.append(
+                dict(
+                    type="line",
+                    x0=plot_right_paper,
+                    y0=pat_lower,
+                    x1=bar_left_paper,
+                    y1=bar_bottom_y,
+                    xref="paper",
+                    yref="y",
+                    line=dict(color="#000000", width=2.5),
+                    opacity=0.5,
+                )
+            )
+        fig.update_layout(shapes=shapes, annotations=annotations)
         return fig
 
     def generate_report(
@@ -828,6 +994,7 @@ class Visualizer:
 </script>
 """
 
+        mathjax_cdn = '<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>'
         nav_and_pages_css = """
 <style type="text/css">
   .site-nav { background:#2C3E50; padding:14px 24px; font-family:Arial,sans-serif; }
@@ -847,14 +1014,19 @@ class Visualizer:
   .page { display:none; font-family:Arial,sans-serif; }
   .page.active { display:block; }
   #report-page { width:100%; max-width:100%; padding:0; margin:0; box-sizing:border-box; }
-  .data-processing-page { width:100%; max-width:100%; padding:24px; margin:0; box-sizing:border-box; }
-  .data-processing-page h1 { color:#2C3E50; font-size:28px; margin-bottom:16px; }
-  .data-processing-page h2 { color:#555; font-size:20px; margin:24px 0 12px; }
-  .data-processing-page p { color:#333; line-height:1.6; margin-bottom:16px; }
+  .data-processing-page,
+  .min-turn-page { width:100%; max-width:100%; padding:24px; margin:0; box-sizing:border-box; }
+  .data-processing-page h1,
+  .min-turn-page h1 { color:#2C3E50; font-size:28px; margin-bottom:16px; }
+  .data-processing-page h2,
+  .min-turn-page h2 { color:#555; font-size:20px; margin:24px 0 12px; }
+  .data-processing-page p,
+  .min-turn-page p { color:#333; line-height:1.6; margin-bottom:16px; }
   .placeholder-box { background:#f5f5f5; border:1px dashed #ccc; color:#888; padding:40px; text-align:center; margin:16px 0; border-radius:4px; }
   .placeholder-img { min-height:200px; }
   .placeholder-plot { min-height:300px; }
-  #data-processing-page { min-width: 100%; }
+  #data-processing-page,
+  #min-turn-page { min-width: 100%; }
   .data-processing-page .averaging-plots-wrapper { width:100% !important; min-width:100% !important; max-width:100% !important; box-sizing:border-box; }
   .data-processing-page .averaging-plots-wrapper .plotly-graph-div { width:100% !important; min-width:100% !important; max-width:100% !important; }
   .data-processing-page .js-plotly-plot { width:100% !important; }
@@ -865,6 +1037,7 @@ class Visualizer:
             '<nav class="site-nav">'
             '<a href="#" id="nav-report" class="active">Raw Data</a>'
             '<a href="#" id="nav-data-processing">Data Processing</a>'
+            '<a href="#" id="nav-min-turn-radius">Minimum Turn Radius Calculation</a>'
             '</nav>'
         )
         data_processing_page = """
@@ -886,31 +1059,83 @@ class Visualizer:
   <h2>Step 4: Re-Tracking Summary</h2>
   <p>Re-tracking summary at each position: average of Step 3's PAT Mistracked Left and PAT Mistracked Right (PAT), and average of Standard Mistracked Left and Standard Mistracked Right (Standard).</p>
   <!-- RE_TRACKING_SUMMARY_PLOT -->
-  <p>The figure of merit for belt tracking testing is the slope of the trendlines shown above. This slope shows how quickly the belt returns to the centerline after being mistracked, in units of deg/ft.<br>
-  The greater the slope, the quicker the belt returns to the centerline after being mistracked, and the tighter the minimum possible turn radius can be.</p>
-  <div class="placeholder-box" style="overflow-x:auto;">
-    <table style="width:100%; border-collapse:collapse; font-size:14px;">
-      <thead>
-        <tr style="background:#2C3E50; color:#ecf0f1;">
-          <th style="border:1px solid #ddd; padding:10px; text-align:left;">Placeholder column 1</th>
-          <th style="border:1px solid #ddd; padding:10px; text-align:left;">Placeholder column 2</th>
-          <th style="border:1px solid #ddd; padding:10px; text-align:left;">Placeholder column 3</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr><td style="border:1px solid #ddd; padding:8px;">—</td><td style="border:1px solid #ddd; padding:8px;">—</td><td style="border:1px solid #ddd; padding:8px;">—</td></tr>
-        <tr style="background:#f9f9f9;"><td style="border:1px solid #ddd; padding:8px;">—</td><td style="border:1px solid #ddd; padding:8px;">—</td><td style="border:1px solid #ddd; padding:8px;">—</td></tr>
-      </tbody>
-    </table>
-    <p style="margin:8px 0 0; color:#888; font-size:12px;">Placeholder table — replace with re-tracking summary data as needed.</p>
+  <p>The above plot and corresponding trendline directly show how good each design is at re-tracking belt. The trendline's slope shows how quickly the belt returns to the centerline after being mistracked, in units of deg/ft.<br>
+  The larger the slope, the quicker the belt returns to the centerline after being mistracked, and the tighter the minimum possible turn radius can be.<br>
+  In the next section, will show how we can calculate the minimum turn radius from the slope of the trendline.</p>
+  <h2>Caveats</h2>
+  <ul>
+    <li><strong>Sensor accuracy</strong><br>
+      High initial offset (± 1.5°).
+      <div style="margin:8px 0 6px 0;">
+        <img src="../reports/Report%20images/inclinometer%20offset%20error.png" alt="Inclinometer offset error" style="max-width:1200px;width:100%;height:auto;border:1px solid #ddd;border-radius:4px;">
+      </div>
+      Low accuracy (± 0.6°).
+    </li>
+    <li><strong>Sensor installation</strong><br>Yaw referenced off the segment interface which has a slight cant (reportedly between 0.7° and 2.5°).<br>Aimed for ±0.1° of top dead center, but concrete screws led to minor deviations (still <0.3°).</li>
+    <li><strong>Belt hardware installation</strong><br>PAT assemblies installed slightly yawed and rolled (referenced by eye off segment inserts; rolled due to difficulty holding the drill jig).<br>Standard idlers installed slightly translated toward mining left. Rough observations suggest the belt is ~2.2 inches left.</li>
+    <li><strong>Non-representative tension profile</strong><br>Test conducted in a straight tunnel with very low belt tension. In a curve, tension would pull the belt to the inside and help activate PAT more.</li>
+  </ul>
+</div>
+"""
+        min_turn_page = """
+<div id="min-turn-page" class="page min-turn-page">
+  <h1>Minimum Turn Radius Calculation</h1>
+  <p>This page will document the methodology and calculations used to convert the re-tracking summary into a minimum allowable turn radius for the conveyor system.</p>
+  <p>To get a min turn radius from belt re-tracking, we will model this problem geometrically as a regular polygon. The sides of the polygon will be the rings, and the vertices will be each carry idler, acting to discretely change the belt tracking by some small amount. The accumulation of many of these discrete tracking events allows the belt to turn, and the radius of this regular polygon will be the minimum turn radius a given design can achieve when it is tracking the belt at its best. The following steps outline how we can go from re-tracking roll rate as measured by the inclinometers to a min turn radius:</p>
+  <ol>
+    <li>Convert re-tracking angle rate in the Z plane to re-tracking inch rate in the Y plane.</li>
+    <li>Obtain the top down re-tracking angle over the course of a ring. This takes the re-tracking inch rate and the 5ft distance between carry idlers, and calculates the change in direction the belt has to make to track over that rate.</li>
+    <li>Calculate the belt travel length between two carry idlers in a turn. This is the chord length between two points on the edge of an arc, where the radius of that arc is the turn radius we are calculating.</li>
+    <li>Calculate the angle between two subsequent chords. In order to calculate the turn radius, we will model the belt path as discrete turns around a curve. Assuming constant 5ft idler spacing and constant re-tracking rate, we can model this as a regular n-sided polygon.</li>
+    <li>Calculate the number of sides of the regular polygon.</li>
+    <li>Use the number of sides and chord length of the regular polygon to calculate the radius of the circumscribed circle.</li>
+    <li>Convert radius to feet.</li>
+  </ol>
+  <p>The following outlines each of these steps, using the expected performance per the <a href="https://docs.google.com/presentation/d/1kWKlIWqVpEbfkSmq3znWbMzgXOml7g0Xx4mGlVIS_WU/edit?slide=id.g38c2608bd66_0_57#slide=id.g38c2608bd66_0_57" target="_blank" rel="noopener">original design brief</a> as an example.</p>
+
+  <h2>Constants</h2>
+  <p>\(s\), carry idler spacing / ring length [in]: 60</p>
+  <p>\(l_{\mathrm{PAT}}\), swing arm length for PAT [in]: 17.11391</p>
+  <p>\(l_{\mathrm{STD}}\), swing arm length for Standard [in]: 17.59521</p>
+  <div style="display:flex; flex-wrap:wrap; gap:16px; margin:12px 0;">
+    <div style="flex:1; min-width:280px;">
+      <img src="../reports/Report%20images/swing%20arm%20length%20pat.png" alt="Swing arm length PAT" style="max-width:100%; height:auto; border:1px solid #ddd; border-radius:4px;">
+    </div>
+    <div style="flex:1; min-width:280px;">
+      <img src="../reports/Report%20images/swing%20arm%20length%20standard.png" alt="Swing arm length Standard" style="max-width:100%; height:auto; border:1px solid #ddd; border-radius:4px;">
+    </div>
   </div>
-  <h2>Image placeholder</h2>
-  <div class="placeholder-box placeholder-img">Image placeholder — add diagram or screenshot here</div>
-  <h2>Processing pipeline</h2>
-  <p>Placeholder for pipeline description and optional Plotly graph below.</p>
-  <div class="placeholder-box placeholder-plot">Plotly graph placeholder — add chart or visualization here</div>
-  <h2>Additional section</h2>
-  <p>Placeholder for more text, figures, or tables as needed.</p>
+  <h2>Re-tracking roll rate</h2>
+  <div style="display:flex; flex-wrap:wrap; gap:24px; align-items:flex-start;">
+    <div style="flex:1; min-width:280px;">
+      <p>Per design, the re-tracking roll rate should be 0.402 in/ft. Notice this is quite a bit bigger than the experimentally determined re-tracking roll rate of 0.244 in/ft from the PT5 testing.<br>
+  For a small section of a curve, we can linearly extrapolate this to a re-tracking roll rate in in/ring by multiplying by 5.</p>
+  <p>\(\\theta_r \\approx 2.0092^{\circ}\)</p>
+    </div>
+    <div style="flex:1; min-width:280px;">
+      <div style="margin:12px 0;">
+    <img src="../reports/Report%20images/retracking%20roll%20rate%20clean.png" alt="Re-tracking roll rate" style="max-width:50%; width:50%; height:auto; border:1px solid #ddd; border-radius:4px;">
+  </div>
+    </div>
+  </div>
+  <p>This means every ring, the inclinometer should read a 2.0092 degree change in roll for an ideal PAT design in ideal conditions.</p>
+  <p>Note: The r subscript denotes that we are using one ring as our reference frame. Anytime it is used in this report, it means that parameter could also be expressed in inches or feet.</p>
+ <h2>Top down re-tracking rate</h2>
+  <div style="display:flex; flex-wrap:wrap; gap:24px; align-items:flex-start;">
+    <div style="flex:1; min-width:280px;">
+ <p>Changing perspective to a top down view, this means every ring, the belt tracks 0.6”. This is given by:</p>
+ <p>\(\Delta_r = l_{\mathrm{PAT}} \\times \sin(\\theta_r) \\approx 0.6^{"}\)</p>
+ <p>We can define another way to track belt per ring, which is the angular tracking rate. This is given by:</p>
+ <p>\(\\alpha_r = \\arctan(\\frac{\\Delta_r}{60}) \\approx 0.57296^{\circ}\)</p>
+    </div>
+    <div style="flex:1; min-width:280px;">
+ <div style="margin:12px 0;">
+    <img src="../reports/Report%20images/top%20down%20re-tracking%20rate.png" alt="Top down re-tracking rate" style="max-width:50%; width:50%; height:auto; border:1px solid #ddd; border-radius:4px;">
+  </div>
+    </div>
+  </div>
+
+
 </div>
 """
         data_processing_page = data_processing_page.replace(
@@ -923,27 +1148,42 @@ class Visualizer:
 (function() {
   var navReport = document.getElementById('nav-report');
   var navDataProcessing = document.getElementById('nav-data-processing');
+  var navMinTurn = document.getElementById('nav-min-turn-radius');
   var reportPage = document.getElementById('report-page');
   var dataProcessingPage = document.getElementById('data-processing-page');
-  if (!navReport || !navDataProcessing || !reportPage || !dataProcessingPage) return;
+  var minTurnPage = document.getElementById('min-turn-page');
+  if (!navReport || !navDataProcessing || !navMinTurn || !reportPage || !dataProcessingPage || !minTurnPage) return;
   function showReport() {
     reportPage.classList.add('active');
     dataProcessingPage.classList.remove('active');
+    minTurnPage.classList.remove('active');
     navReport.classList.add('active');
     navDataProcessing.classList.remove('active');
+    navMinTurn.classList.remove('active');
   }
   function showDataProcessing() {
     reportPage.classList.remove('active');
     dataProcessingPage.classList.add('active');
+    minTurnPage.classList.remove('active');
     navReport.classList.remove('active');
     navDataProcessing.classList.add('active');
+    navMinTurn.classList.remove('active');
     var graphs = document.querySelectorAll('#data-processing-page .plotly-graph-div');
     if (typeof Plotly !== 'undefined') {
       for (var i = 0; i < graphs.length; i++) { Plotly.Plots.resize(graphs[i]); }
     }
   }
+  function showMinTurn() {
+    reportPage.classList.remove('active');
+    dataProcessingPage.classList.remove('active');
+    minTurnPage.classList.add('active');
+    navReport.classList.remove('active');
+    navDataProcessing.classList.remove('active');
+    navMinTurn.classList.add('active');
+  }
   navReport.addEventListener('click', function(e) { e.preventDefault(); showReport(); });
   navDataProcessing.addEventListener('click', function(e) { e.preventDefault(); showDataProcessing(); });
+  navMinTurn.addEventListener('click', function(e) { e.preventDefault(); showMinTurn(); });
 })();
 </script>
 """
@@ -951,6 +1191,7 @@ class Visualizer:
         html = html.replace(
             "<body>",
             "<body>\n"
+            + mathjax_cdn + "\n"
             + nav_and_pages_css
             + nav_html
             + '\n<div id="report-page" class="page active">\n'
@@ -960,7 +1201,7 @@ class Visualizer:
         )
         html = html.replace(
             "</body>",
-            "</div>\n" + data_processing_page + "\n" + page_switch_script + "\n</body>",
+            "</div>\n" + data_processing_page + "\n" + min_turn_page + "\n" + page_switch_script + "\n</body>",
             1,
         )
         with open(output_path, "w", encoding="utf-8") as f:
